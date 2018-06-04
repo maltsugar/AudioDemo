@@ -46,7 +46,7 @@
 
 // 录制
 // maxDuration <= 0,则为不限制时长
-- (instancetype)initWithRecordURL:(NSURL *)fileURL maxDurarion:(CGFloat)maxDuration;
+- (instancetype)initWithRecordURL:(NSURL *)fileURL maxDurarion:(NSTimeInterval)maxDuration;
 - (void)startRecord;
 - (void)startConvertToMP3;
 

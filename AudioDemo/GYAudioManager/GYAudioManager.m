@@ -9,10 +9,12 @@
 #import "GYAudioManager.h"
 #import <lame/lame.h>
 
+#define kGYRecorderRate 44100.0
+
 @interface GYAudioManager ()<AVAudioRecorderDelegate, AVAudioPlayerDelegate>
 
 @property (nonatomic, strong) NSURL *originURL;
-@property (nonatomic, assign) CGFloat maxDuration;
+@property (nonatomic, assign) NSTimeInterval maxDuration;
 
 @end
 
@@ -20,14 +22,14 @@
 @implementation GYAudioManager
 
 
-- (instancetype)initWithRecordURL:(NSURL *)fileURL maxDurarion:(CGFloat)maxDuration
+- (instancetype)initWithRecordURL:(NSURL *)fileURL maxDurarion:(NSTimeInterval)maxDuration
 {
     self = [super init];
     if (self) {
         _originURL = fileURL;
         
         if (maxDuration > 0) {
-            _maxDuration = maxDuration + 0.15;
+            _maxDuration = maxDuration;
         }
         
 #if TARGET_IPHONE_SIMULATOR
@@ -145,14 +147,12 @@
         [self.delegate audioManagerDidStartConvertToMP3];
     }
     
-    
-    //开启子线程转换文件
-    dispatch_async(dispatch_get_global_queue(0, 0), ^{
+    // 转换格式
+    [self conventToMp3WithCafFilePath:souceFilePath mp3FilePath:mp3FilePath sampleRate:kGYRecorderRate callback:^(BOOL result) {
         
-        // 转换格式
-        BOOL flag = [self audio_PCMtoMP3:souceFilePath andDesPath:mp3FilePath];
         NSURL *mp3URL = nil;
-        if (flag) {
+        
+        if (result) {
             mp3URL = [NSURL fileURLWithPath:mp3FilePath];
             // 删除录音文件
             [self.audioRecorder deleteRecording];
@@ -167,8 +167,7 @@
                 [self.delegate audioManager:self didFinishConvertToMP3:mp3URL];
             }
         });
-        
-    });
+    }];
 }
 
 #pragma mark- <AVAudioRecorderDelegate>
@@ -234,54 +233,65 @@
 }
 
 #pragma mark- 转换MP3
-- (BOOL)audio_PCMtoMP3:(NSString *)soucePath andDesPath:(NSString *)desPath {
-    NSLog(@"开始转换");
+- (void)conventToMp3WithCafFilePath:(NSString *)cafFilePath
+                        mp3FilePath:(NSString *)mp3FilePath
+                         sampleRate:(int)sampleRate
+                           callback:(void(^)(BOOL result))callback
+{
     
-    @try {
-        int read, write;
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         
-        FILE *pcm = fopen([soucePath cStringUsingEncoding:1],
-                          "rb"); // source 被转换的音频文件位置
-        fseek(pcm, 4 * 1024, SEEK_CUR); // skip file header
-        FILE *mp3 = fopen([desPath cStringUsingEncoding:1],
-                          "wb"); // output 输出生成的Mp3文件位置
-        
-        const int PCM_SIZE = 8192;
-        const int MP3_SIZE = 8192;
-        short int pcm_buffer[PCM_SIZE * 2];
-        unsigned char mp3_buffer[MP3_SIZE];
-        
-        lame_t lame = lame_init();
-        lame_set_in_samplerate(lame, 44100.0);
-        lame_set_VBR(lame, vbr_default);
-        lame_init_params(lame);
-        
-        do {
-            // 不能强转
-            read = fread(pcm_buffer, 2 * sizeof(short int), PCM_SIZE, pcm);
-            if (read == 0)
-                write = lame_encode_flush(lame, mp3_buffer, MP3_SIZE);
-            else
-                write = lame_encode_buffer_interleaved(lame, pcm_buffer, read,
-                                                       mp3_buffer, MP3_SIZE);
+        @try {
+            int read, write;
             
-            fwrite(mp3_buffer, write, 1, mp3);
+            FILE *pcm = fopen([cafFilePath cStringUsingEncoding:1], "rb");  //source 被转换的音频文件位置
+            fseek(pcm, 4*1024, SEEK_CUR);                                   //skip file header
+            FILE *mp3 = fopen([mp3FilePath cStringUsingEncoding:1], "wb+");  //output 输出生成的Mp3文件位置
             
-        } while (read != 0);
-        
-        lame_close(lame);
-        fclose(mp3);
-        fclose(pcm);
-        
-    } @catch (NSException *exception) {
-        NSLog(@"%@", [exception description]);
-        return NO;
-        
-    } @finally {
-        NSLog(@"MP3生成成功");
-    }
-    
-    return YES;
+            const int PCM_SIZE = 8192;
+            const int MP3_SIZE = 8192;
+            short int pcm_buffer[PCM_SIZE*2];
+            unsigned char mp3_buffer[MP3_SIZE];
+            
+            lame_t lame = lame_init();
+            lame_set_num_channels(lame,1);//设置1为单通道，默认为2双通道
+            lame_set_in_samplerate(lame, sampleRate);
+            lame_set_VBR(lame, vbr_default);
+            lame_init_params(lame);
+            
+            do {
+                
+                read = (int)fread(pcm_buffer, 2*sizeof(short int), PCM_SIZE, pcm);
+                if (read == 0) {
+                    write = lame_encode_flush(lame, mp3_buffer, MP3_SIZE);
+                    
+                } else {
+                    write = lame_encode_buffer_interleaved(lame, pcm_buffer, read, mp3_buffer, MP3_SIZE);
+                }
+                
+                fwrite(mp3_buffer, write, 1, mp3);
+                
+            } while (read != 0);
+            
+            lame_mp3_tags_fid(lame, mp3);
+            
+            lame_close(lame);
+            fclose(mp3);
+            fclose(pcm);
+        }
+        @catch (NSException *exception) {
+            NSLog(@"%@",[exception description]);
+            if (callback) {
+                callback(NO);
+            }
+        }
+        @finally {
+            NSLog(@"-----\n  MP3生成成功: %@   -----  \n", mp3FilePath);
+            if (callback) {
+                callback(YES);
+            }
+        }
+    });
 }
 
 
@@ -321,7 +331,7 @@
     // 设置录音格式
     [dicM setObject:@(kAudioFormatLinearPCM) forKey:AVFormatIDKey];
     // 设置录音采样率，8000是电话采样率，对于一般录音已经够了
-    [dicM setObject:@(44100.0) forKey:AVSampleRateKey];
+    [dicM setObject:@(kGYRecorderRate) forKey:AVSampleRateKey];
     // 设置通道,这里采用单声道
     [dicM setObject:@(2) forKey:AVNumberOfChannelsKey];
     // 每个采样点位数,分为8、16、24、32
