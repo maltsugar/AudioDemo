@@ -9,7 +9,7 @@
 #import "GYAudioManager.h"
 #import <lame/lame.h>
 
-@interface GYAudioManager ()<AVAudioRecorderDelegate>
+@interface GYAudioManager ()<AVAudioRecorderDelegate, AVAudioPlayerDelegate>
 
 @property (nonatomic, strong) NSURL *originURL;
 @property (nonatomic, assign) CGFloat maxDuration;
@@ -52,28 +52,44 @@
             [self.audioRecorder record];
         }
         
-        self.timer.fireDate = [NSDate distantPast];
+        if (self.audioRecorder) {
+            // 创建成功
+            self.timer.fireDate = [NSDate distantPast];
+        }
+        
     }
 }
 
 
 - (void)pause
 {
-    if ([self.audioRecorder isRecording]) {
-        [self.audioRecorder pause];
-        self.timer.fireDate = [NSDate distantFuture];
+    if (_audioRecorder) {
+        
+        if ([_audioRecorder isRecording]) {
+            [_audioRecorder pause];
+            self.timer.fireDate = [NSDate distantFuture];
+        }
     }
     
-    if ([self.audioPlayer isPlaying]) {
-        [self.audioPlayer pause];
-        self.timer.fireDate = [NSDate distantFuture];
+    if (_audioPlayer) {
+        if ([_audioPlayer isPlaying]) {
+            [_audioPlayer pause];
+            self.timer.fireDate = [NSDate distantFuture];
+        }
     }
+    
 }
 
 - (void)stop
 {
-    [self.audioRecorder stop];
-    [self.audioPlayer stop];
+    
+    if (_audioRecorder) {
+        [_audioRecorder stop];
+    }
+    if (_audioPlayer) {
+        [_audioPlayer stop];
+    }
+
     
 //    self.timer.fireDate = [NSDate distantFuture];
     if (_timer) {
@@ -93,12 +109,16 @@
     
     NSError *error = nil;
     _audioPlayer = [[AVAudioPlayer alloc]initWithContentsOfURL:fileURL error:&error];
-    _audioPlayer.numberOfLoops = 0;
+    _audioPlayer.numberOfLoops = -1;
+    _audioPlayer.delegate = self;
     [_audioPlayer prepareToPlay];
     if (error) {
         NSLog(@"创建播放器过程中发生错误，错误信息：%@",error.localizedDescription);
+        return;
     }
     [_audioPlayer play];
+    self.timer.fireDate = [NSDate distantPast];
+    
 }
 
 - (void)startConvertToMP3
@@ -151,7 +171,7 @@
     });
 }
 
-#pragma mark- <AVAudioRecorderDelegate, AVAudioPlayerDelegate>
+#pragma mark- <AVAudioRecorderDelegate>
 // 录音完毕的回调
 - (void)audioRecorderDidFinishRecording:(AVAudioRecorder *)recorder successfully:(BOOL)flag
 {
