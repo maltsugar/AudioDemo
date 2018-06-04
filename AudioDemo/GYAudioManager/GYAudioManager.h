@@ -12,6 +12,7 @@
 @class GYAudioManager;
 @protocol GYAudioManagerDelegate <AVAudioRecorderDelegate, AVAudioPlayerDelegate>
 
+@optional
 - (void)audioManagerDidStartConvertToMP3;
 - (void)audioManager:(GYAudioManager *)audioMgr didFinishConvertToMP3:(NSURL *)mp3FileURL;
 
