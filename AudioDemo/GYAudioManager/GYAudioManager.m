@@ -182,21 +182,35 @@
         [self startConvertToMP3];
     }
     
-    if ([self.delegate respondsToSelector:@selector(audioRecorderDidFinishRecording:successfully:)]) {
-        [self.delegate audioRecorderDidFinishRecording:recorder successfully:flag];
+    if ([self.delegate respondsToSelector:@selector(audioManager:recorderDidFinishSuccessfully:)]) {
+        [self.delegate audioManager:self recorderDidFinishSuccessfully:flag];
     }
 }
+- (void)audioRecorderEncodeErrorDidOccur:(AVAudioRecorder *)recorder error:(NSError * __nullable)error
+{
+    [recorder stop];
+    if ([self.delegate respondsToSelector:@selector(audioManager:recorderEncodeErrorDidOccur:)]) {
+        [self.delegate audioManager:self recorderEncodeErrorDidOccur:error];
+    }
+}
+
 
 #pragma mark- AVAudioPlayerDelegate
 - (void)audioPlayerDidFinishPlaying:(AVAudioPlayer *)player successfully:(BOOL)flag
 {
     [player stop];
     
-    if ([self.delegate respondsToSelector:@selector(audioPlayerDidFinishPlaying:successfully:)]) {
-        [self.delegate audioPlayerDidFinishPlaying:player successfully:flag];
+    if ([self.delegate respondsToSelector:@selector(audioManager:playerDidFinishPlayingSuccessfully:)]) {
+        [self.delegate audioManager:self playerDidFinishPlayingSuccessfully:flag];
     }
 }
-
+- (void)audioPlayerDecodeErrorDidOccur:(AVAudioPlayer *)player error:(NSError * __nullable)error
+{
+    [player stop];
+    if ([self.delegate respondsToSelector:@selector(audioManager:playerDecodeErrorDidOccur:)]) {
+        [self.delegate audioManager:self playerDecodeErrorDidOccur:error];
+    }
+}
 
 
 #pragma mark- 私有方法

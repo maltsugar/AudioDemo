@@ -10,11 +10,22 @@
 #import <AVFoundation/AVFoundation.h>
 
 @class GYAudioManager;
-@protocol GYAudioManagerDelegate <AVAudioRecorderDelegate, AVAudioPlayerDelegate>
+@protocol GYAudioManagerDelegate <NSObject>
 
 @optional
+- (void)audioManager:(GYAudioManager *)audioMgr recorderDidFinishSuccessfully:(BOOL)flag;
+- (void)audioManager:(GYAudioManager *)audioMgr recorderEncodeErrorDidOccur:(NSError * __nullable)error;
+- (void)audioManager:(GYAudioManager *)audioMgr playerDidFinishPlayingSuccessfully:(BOOL)flag;
+- (void)audioManager:(GYAudioManager *)audioMgr playerDecodeErrorDidOccur:(NSError * __nullable)error;
+
+
+
+// 转换mp3
 - (void)audioManagerDidStartConvertToMP3;
 - (void)audioManager:(GYAudioManager *)audioMgr didFinishConvertToMP3:(NSURL *)mp3FileURL;
+
+
+
 
 // 每0.1秒回调
 - (void)audioManager:(GYAudioManager *)audioMgr didRecordFileDuration:(CGFloat)fileDuration totalDuration:(CGFloat)totalDuration;
